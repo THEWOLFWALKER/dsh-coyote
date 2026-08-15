@@ -1,6 +1,6 @@
 # dsh-coyote
 
-**English** · [**中文**](README.zh-CN.md)
+**English** · [**简体中文**](README.zh-CN.md)
 
 Agent- and GUI-controlled [DG-LAB Coyote](https://www.dungeon-lab.com/) e-stim plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).
 

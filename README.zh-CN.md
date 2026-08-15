@@ -1,6 +1,6 @@
 # dsh-coyote
 
-[**English**](README.md) · **中文**
+[**English**](README.md) · **简体中文**
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 [DG-LAB 郊狼](https://www.dungeon-lab.com/)电击控制插件，同时提供 Agent 工具与网页 GUI 两条控制面。
 

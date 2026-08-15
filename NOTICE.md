@@ -1,5 +1,7 @@
 # Third-Party Notices
 
+**English** · [**简体中文**](NOTICE.zh-CN.md)
+
 This project is standalone original code; it does not incorporate source from the projects below, but their public documentation and ecosystem conventions served as the technical basis for interoperability and design decisions. We thank their authors.
 
 ## DG-LAB-OPENSOURCE
