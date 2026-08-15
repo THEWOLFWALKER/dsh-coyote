@@ -14,6 +14,7 @@
 
 import { defineTool, type ToolDefinition } from '@deepseek-ai/dsh-tools'
 import { CoyoteError } from '../errors.ts'
+import type { AutoStimEngine } from '../auto-stim/engine.ts'
 import type { ChannelSelection } from '../types.ts'
 import type { CoyoteRuntime, WaveSource } from '../runtime/runtime.ts'
 import { getBuiltIn } from '../waveform/library.ts'
@@ -24,6 +25,8 @@ export interface CoyoteToolsOptions {
   defaultPlaySec: number
   /** Hard playback cap the runtime enforces. */
   maxPlaySec: number
+  /** Auto-stim engine whose status rides on coyote_status, when enabled. */
+  autoStim?: AutoStimEngine
 }
 
 const STATES = ['idle', 'waiting-app', 'bound'] as const
@@ -67,6 +70,25 @@ const DEVICE_STRENGTH_SCHEMA = {
   },
 } as const
 
+const AUTO_STIM_STATUS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  description: 'Event-driven auto-stim block (absent fields mean "not applicable").',
+  properties: {
+    enabled: { type: 'boolean', required: true, description: 'False when autoStim is disabled in config.' },
+    armed: { type: 'boolean', description: 'Runtime arm switch; false drops every event.' },
+    maxIntensity: { type: 'integer', description: 'Auto-trigger strength cap (0..200).' },
+    cooldownSec: { type: 'number', description: 'Minimum seconds between auto triggers.' },
+    inFlight: { type: 'boolean', description: 'A pulse (including restore) is running.' },
+    fired: { type: 'integer', description: 'Pulses delivered since plugin start.' },
+    skipped: { type: 'integer', description: 'Events dropped by a gate (cooldown/busy/not-bound/disarmed).' },
+    lastEvent: { type: 'string', description: 'Domain event of the last fired pulse.' },
+    lastSkipReason: { type: 'string', description: '"<event>:<reason>" of the last dropped event.' },
+    lastFiredAt: { type: 'number', description: 'Unix ms of the last fired pulse.' },
+    cooldownRemainingSec: { type: 'number', description: 'Seconds until the next trigger is allowed.' },
+  },
+} as const
+
 const STATUS_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -80,6 +102,7 @@ const STATUS_SCHEMA = {
     cooldownRemainingSec: { type: 'number', required: true },
     builtinCount: { type: 'integer', required: true },
     importedCount: { type: 'integer', required: true },
+    autoStim: AUTO_STIM_STATUS_SCHEMA,
   },
 } as const
 
@@ -126,13 +149,18 @@ export function createCoyoteTools(
     defineTool({
       name: 'coyote_status',
       description:
-        'Snapshot of the Coyote link: connection state (idle / waiting-app / bound), the pairing session with its QR, latest device-reported channel strengths and App-side hard limits, the effective per-channel caps this runtime enforces, whether waveform playback is running, and the remaining pairing cooldown. Read this first in any uncertain situation; it never changes device output.',
+        'Snapshot of the Coyote link: connection state (idle / waiting-app / bound), the pairing session with its QR, latest device-reported channel strengths and App-side hard limits, the effective per-channel caps this runtime enforces, whether waveform playback is running, the remaining pairing cooldown, and (when autoStim is enabled in config) the auto-stim block: armed flag, fire/skip counters, and last trigger. Read this first in any uncertain situation; it never changes device output.',
       parameters: {},
       output: {
         schema: STATUS_SCHEMA,
         render: (_args, value) => [{ type: 'text', text: json(value) }],
       },
-      execute: async () => runtime.status(),
+      execute: async () => ({
+        ...runtime.status(),
+        ...(options.autoStim === undefined
+          ? { autoStim: { enabled: false } }
+          : { autoStim: options.autoStim.status() }),
+      }),
       presentCall: () => ({ card: 'generic', title: 'Read Coyote status', kind: 'read' }),
     }),
 

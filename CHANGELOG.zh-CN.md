@@ -3,6 +3,21 @@
 本项目的所有重要变更都在此记录。
 格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.2.0] — 2026-08-15
+
+### 新增
+
+- **自动电击**（`src/auto-stim/`）：可选的事件驱动电击。mapper 把 DSH 会话事件流与 `agent/error` / `agent/status` 归约为十一个领域事件（`turn_start`、`assistant_start`、`stream_tick`、`tool_call`、`tool_error`、`agent_error`、`turn_end_completed`、`turn_end_aborted`、`turn_end_max_tokens`、`todo_clear`、`agent_idle`），带按回合错误去重、tick 节流与边沿检测；engine 对每条启用的规则发出一个有界的**绝对瞬态脉冲**——抬升到 `min(规则 intensity, maxIntensity)`、波形播放一次、恢复脉冲前基线——闸门链（规则启用 → 布防 → 非忙碌 → 冷却 → App 已绑定）拦截的事件丢弃并计数，绝不排队。
+- **自动电击配置**（`autoStim.*`）：`enabled`（默认 false）、`maxIntensity`（30）、`cooldownSec`（5）、`tickIntervalSec`（5）、`restoreBaseline`（true）与逐事件规则覆盖；未知事件名启动时带完整合法列表报错；所有默认强度 ≤ `maxIntensity`。
+- **GUI**：新增自动电击区块（实时布防状态、脉冲输出指示、触发/跳过计数、最近事件与跳过原因、冷却）与 `auto` 操作的布防/解除开关；仅在启用自动电击时出现。
+- **工具**：`coyote_status` 在功能启用时携带 `autoStim` 块（布防、计数、剩余冷却），否则为 `{enabled: false}`。
+
+### 修复
+
+- 自动电击卸载时截断进行中的脉冲（`stopWave`）并从任意脉冲阶段恢复基线，插件卸载不会遗留抬升的强度。
+- 既非内置也非导入的波形名在任何设备指令之前失败（无幽灵抬升），按脉冲记日志而非拖垮宿主。
+- 抬升之后脉冲失败（如播放中途 App 掉线）先恢复基线再上抛错误。
+
 ## [0.1.0] — 2026-08-15
 
 首次公开发布。

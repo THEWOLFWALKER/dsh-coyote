@@ -641,6 +641,34 @@ window.__ModuleLoader__.load({
           }),
         }, '紧急停止'))
 
+      // auto-stim section (only when the feature is enabled in config)
+      const auto = status && status.autoStim && status.autoStim.enabled === true ? status.autoStim : null
+      const autoSection = auto === null ? null : e('div', null,
+        e('div', { style: sectionTitle('自动电击 · 事件触发') }, '自动电击 · 事件触发'),
+        e('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+          e('span', {
+            style: {
+              fontSize: 11, flex: 1, color: auto.armed === false ? C.dim : C.ok,
+              animation: auto.inFlight ? 'dshCoyPulse .8s infinite' : undefined,
+            },
+          }, auto.armed === false
+            ? '○ 已解除 · 事件不再触发电击'
+            : auto.inFlight ? '● 自动脉冲输出中' : '○ 已布防 · 监听 agent 事件'),
+          e('button', {
+            onClick: () => sendOp({ op: 'auto', armed: auto.armed === false }),
+            style: btnStyle({
+              fontSize: 11,
+              borderColor: auto.armed === false ? C.ok : C.danger,
+              color: auto.armed === false ? C.ok : C.danger,
+            }),
+          }, auto.armed === false ? '布防' : '解除')),
+        e('div', { style: { color: C.dim, fontSize: 10, marginTop: 3, fontVariantNumeric: 'tabular-nums' } },
+          `触发 ${auto.fired != null ? auto.fired : 0} · 跳过 ${auto.skipped != null ? auto.skipped : 0}`
+          + (auto.lastEvent ? ` · 最近 ${auto.lastEvent}` : '')
+          + (auto.lastSkipReason ? ` · 跳过原因 ${auto.lastSkipReason}` : '')
+          + (auto.cooldownRemainingSec > 0 ? ` · 冷却 ${auto.cooldownRemainingSec}s` : '')
+          + ` · 上限 ${auto.maxIntensity != null ? auto.maxIntensity : '?'}`))
+
       // import section
       const importSection = e('div', null,
         e('div', { style: sectionTitle('导入社区波形 · .pulses / JSON') }, '导入社区波形 · .pulses / JSON'),
@@ -667,6 +695,7 @@ window.__ModuleLoader__.load({
         strengthSection,
         waveformSection,
         controlSection,
+        autoSection,
         importSection,
         e('div', { style: { color: C.dim, fontSize: 10, borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 10 } },
           '面板与 coyote_* 工具共用同一安全边界：软上限 · 升速限制 · 会话冷却 · 断连即停'))

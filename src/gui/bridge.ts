@@ -15,11 +15,12 @@
  *   {op:'play', waveform?|spec?|hex_entries?, channel?,       start a playback
  *        mode?, duration_sec?, intensity_percent?, mirror?}
  *   {op:'stop'} | {op:'panic'}                                stop waves / emergency stop
+ *   {op:'auto', armed:boolean}                                arm/disarm auto-stim (when enabled)
  *   {op:'list'}                                               waveforms list refresh
  *   {op:'import', text, file_name?}                           import community waveforms
  *
  * Server → client events (broadcast to every GUI socket):
- *   {event:'status', status}       full RuntimeStatus snapshot (on change + on ops)
+ *   {event:'status', status}       full RuntimeStatus snapshot (+ autoStim when enabled)
  *   {event:'waveforms', waveforms} full library list (on hello/list/import)
  *   {event:'ack', op}              op completed
  *   {event:'error', message}       op failed (cooldown active, not bound, bad input…)
@@ -27,6 +28,7 @@
 
 import type { WebSocket } from 'ws'
 import { CoyoteError } from '../errors.ts'
+import type { AutoStimEngine } from '../auto-stim/engine.ts'
 import type { ChannelSelection } from '../types.ts'
 import type { CoyoteRuntime, WaveSource } from '../runtime/runtime.ts'
 import type { ComposeSpec } from '../waveform/composer.ts'
@@ -90,21 +92,29 @@ function asDuration(value: unknown, what: string): number {
 
 /**
  * One bridge instance serves every connected panel. `broadcast` pushes the
- * same snapshot to all sockets, so two open panels never disagree.
+ * same snapshot to all sockets, so two open panels never disagree. When an
+ * auto-stim engine is present its status rides along on every snapshot and
+ * its change notifications trigger broadcasts too.
  */
 export class GuiBridge {
   private readonly sockets = new Set<WebSocket>()
   private unsubscribe: (() => void) | undefined
+  private unsubscribeAutoStim: (() => void) | undefined
   private lastImportedCount = -1
 
-  constructor(private readonly runtime: CoyoteRuntime) {}
+  constructor(
+    private readonly runtime: CoyoteRuntime,
+    private readonly autoStim?: AutoStimEngine,
+  ) {}
 
-  /** Accept one panel socket; subscribes to runtime changes once globally. */
+  /** Accept one panel socket; subscribes to runtime/auto-stim changes once globally. */
   handleConnection(socket: WebSocket): void {
     this.sockets.add(socket)
     if (this.unsubscribe === undefined) {
-      const unsubscribe = this.runtime.subscribe(() => this.onRuntimeChange())
-      this.unsubscribe = unsubscribe
+      this.unsubscribe = this.runtime.subscribe(() => this.onRuntimeChange())
+    }
+    if (this.unsubscribeAutoStim === undefined && this.autoStim !== undefined) {
+      this.unsubscribeAutoStim = this.autoStim.subscribe(() => this.onRuntimeChange())
     }
     socket.on('message', raw => {
       void this.dispatch(socket, raw.toString()).catch(error => {
@@ -113,13 +123,19 @@ export class GuiBridge {
     })
     socket.on('close', () => {
       this.sockets.delete(socket)
-      if (this.sockets.size === 0 && this.unsubscribe !== undefined) {
-        this.unsubscribe()
-        this.unsubscribe = undefined
+      if (this.sockets.size === 0) {
+        if (this.unsubscribe !== undefined) {
+          this.unsubscribe()
+          this.unsubscribe = undefined
+        }
+        if (this.unsubscribeAutoStim !== undefined) {
+          this.unsubscribeAutoStim()
+          this.unsubscribeAutoStim = undefined
+        }
       }
     })
     socket.on('error', () => this.sockets.delete(socket))
-    this.send(socket, { event: 'status', status: this.runtime.status() })
+    this.send(socket, { event: 'status', status: this.composeStatus() })
     this.send(socket, { event: 'waveforms', waveforms: this.runtime.listWaveforms() })
   }
 
@@ -127,8 +143,23 @@ export class GuiBridge {
   dispose(): void {
     this.unsubscribe?.()
     this.unsubscribe = undefined
+    this.unsubscribeAutoStim?.()
+    this.unsubscribeAutoStim = undefined
     for (const socket of [...this.sockets]) socket.close(1001, 'bridge disposed')
     this.sockets.clear()
+  }
+
+  /** Push a fresh snapshot to every connected panel (auto-stim changes use this). */
+  broadcast(): void {
+    this.onRuntimeChange()
+  }
+
+  /** RuntimeStatus plus the auto-stim block when the feature is enabled. */
+  private composeStatus(): Record<string, unknown> {
+    return {
+      ...this.runtime.status(),
+      ...(this.autoStim === undefined ? {} : { autoStim: this.autoStim.status() }),
+    }
   }
 
   private async dispatch(socket: WebSocket, raw: string): Promise<void> {
@@ -144,7 +175,7 @@ export class GuiBridge {
 
     switch (op.op) {
       case 'hello':
-        this.send(socket, { event: 'status', status: this.runtime.status() })
+        this.send(socket, { event: 'status', status: this.composeStatus() })
         this.send(socket, { event: 'waveforms', waveforms: this.runtime.listWaveforms() })
         return
       case 'pair':
@@ -174,6 +205,14 @@ export class GuiBridge {
         await this.runtime.panicStop()
         this.send(socket, { event: 'ack', op: 'panic' })
         break
+      case 'auto':
+        if (this.autoStim === undefined) {
+          throw new OpError('auto-stim is disabled in config (autoStim.enabled)')
+        }
+        if (typeof op.armed !== 'boolean') throw new OpError('auto needs a boolean "armed"')
+        this.autoStim.setArmed(op.armed)
+        this.send(socket, { event: 'ack', op: 'auto' })
+        break
       case 'list':
         this.send(socket, { event: 'waveforms', waveforms: this.runtime.listWaveforms() })
         return
@@ -196,7 +235,7 @@ export class GuiBridge {
     }
 
     // Ops that mutate state always answer with a fresh snapshot too.
-    this.send(socket, { event: 'status', status: this.runtime.status() })
+    this.send(socket, { event: 'status', status: this.composeStatus() })
   }
 
   private playRequest(op: PlayOp): {
@@ -249,14 +288,15 @@ export class GuiBridge {
     }
   }
 
-  /** Push the new snapshot to every panel whenever the runtime changed. */
+  /** Push the new snapshot to every panel whenever the runtime or engine changed. */
   private onRuntimeChange(): void {
-    const status = this.runtime.status()
+    const status = this.composeStatus()
     for (const socket of [...this.sockets]) {
       this.send(socket, { event: 'status', status })
     }
-    if (status.importedCount !== this.lastImportedCount) {
-      this.lastImportedCount = status.importedCount
+    const importedCount = this.runtime.listWaveforms().length
+    if (importedCount !== this.lastImportedCount) {
+      this.lastImportedCount = importedCount
       const waveforms = this.runtime.listWaveforms()
       for (const socket of [...this.sockets]) {
         this.send(socket, { event: 'waveforms', waveforms })

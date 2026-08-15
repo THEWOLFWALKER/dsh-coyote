@@ -1,0 +1,12 @@
+# dependencies
+node_modules/
+
+# build output
+lib/
+
+# runtime state (imported waveform persistence)
+coyote-waveforms/
+
+# editor / OS noise
+.DS_Store
+*.log

@@ -12,11 +12,30 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { attachAutoStim } from './auto-stim/attach.ts'
+import { AutoStimEngine } from './auto-stim/engine.ts'
+import { EventMapper } from './auto-stim/mapper.ts'
+import { autoStimSchema, normalizeAutoStimConfig, type AutoStimUserConfig } from './auto-stim/rules.ts'
 import { GuiBridge } from './gui/bridge.ts'
 import { CoyoteRuntime } from './runtime/runtime.ts'
 import { createCoyoteTools } from './tools/index.ts'
 
 export { CoyoteError } from './errors.ts'
+export { attachAutoStim } from './auto-stim/attach.ts'
+export { AutoStimEngine, type AutoStimStatus } from './auto-stim/engine.ts'
+export { EventMapper } from './auto-stim/mapper.ts'
+export {
+  AUTO_STIM_EVENTS,
+  DEFAULT_AUTO_STIM_RULES,
+  DEFAULT_AUTO_STIM_SETTINGS,
+  autoStimSchema,
+  normalizeAutoStimConfig,
+  type AutoStimConfig,
+  type AutoStimEvent,
+  type AutoStimRule,
+  type AutoStimSettings,
+  type AutoStimUserConfig,
+} from './auto-stim/rules.ts'
 export { GuiBridge } from './gui/bridge.ts'
 export { CoyoteRuntime, STRENGTH_MAX, STRENGTH_MIN } from './runtime/runtime.ts'
 export type {
@@ -66,6 +85,11 @@ export interface Config {
   increaseRatePerSec?: number
   /** Immediate strength-increase budget in units. */
   increaseBurst?: number
+  /**
+   * Event-driven auto-stim (v0.2). Disabled unless `autoStim.enabled` is
+   * explicitly true; see README "Auto-stim" for the rule table.
+   */
+  autoStim?: AutoStimUserConfig
 }
 
 export const Config: z<Config> = z.object({
@@ -81,10 +105,11 @@ export const Config: z<Config> = z.object({
   defaultPlaySec: z.number().default(30),
   increaseRatePerSec: z.number().default(40),
   increaseBurst: z.number().default(40),
+  autoStim: autoStimSchema(),
 })
 
-/** Config after Schemastery defaults; only publicWsUrl stays optional. */
-type ResolvedConfig = Required<Omit<Config, 'publicWsUrl'>> & Pick<Config, 'publicWsUrl'>
+/** Config after Schemastery defaults; only publicWsUrl and autoStim stay optional. */
+type ResolvedConfig = Required<Omit<Config, 'publicWsUrl' | 'autoStim'>> & Pick<Config, 'publicWsUrl' | 'autoStim'>
 
 /** Validate the resolved values the runtime cannot check itself. @internal */
 export function resolveConfig(config: Config): ResolvedConfig {
@@ -109,7 +134,7 @@ export function resolveConfig(config: Config): ResolvedConfig {
   return resolved
 }
 
-/** Register the eight coyote_* tools and mount the GUI bridge. */
+/** Register the eight coyote_* tools and mount the GUI bridge (+ auto-stim when enabled). */
 export function apply(ctx: Context, config: Config): void {
   const resolved = resolveConfig(config)
   const runtime = new CoyoteRuntime(
@@ -131,10 +156,26 @@ export function apply(ctx: Context, config: Config): void {
     message => ctx.logger.info(`dsh-coyote: ${message}`),
   )
 
-  const bridge = new GuiBridge(runtime)
+  // Auto-stim is opt-in: no listeners, no engine, no GUI section unless enabled.
+  let autoStimEngine: AutoStimEngine | undefined
+  if (resolved.autoStim?.enabled === true) {
+    const autoStimConfig = normalizeAutoStimConfig(resolved.autoStim)
+    autoStimEngine = new AutoStimEngine(
+      runtime,
+      autoStimConfig,
+      message => ctx.logger.info(`dsh-coyote: ${message}`),
+    )
+    const mapper = new EventMapper({ tickIntervalSec: autoStimConfig.tickIntervalSec })
+    attachAutoStim(ctx, mapper, autoStimEngine, message => ctx.logger.warn(`dsh-coyote: ${message}`))
+  }
+
+  const bridge = new GuiBridge(runtime, autoStimEngine)
   runtime.mountGui(socket => bridge.handleConnection(socket))
+  const unsubscribeAutoStim = autoStimEngine?.subscribe(() => bridge.broadcast())
 
   ctx.effect(() => () => {
+    unsubscribeAutoStim?.()
+    autoStimEngine?.dispose()
     bridge.dispose()
     void runtime.dispose()
   }, 'dsh-coyote teardown')
@@ -142,6 +183,7 @@ export function apply(ctx: Context, config: Config): void {
   for (const tool of createCoyoteTools(runtime, {
     defaultPlaySec: resolved.defaultPlaySec,
     maxPlaySec: resolved.maxPlaySec,
+    ...(autoStimEngine === undefined ? {} : { autoStim: autoStimEngine }),
   })) {
     ctx.tools.register(tool)
   }

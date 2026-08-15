@@ -4,7 +4,7 @@
 
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 [DG-LAB 郊狼](https://www.dungeon-lab.com/)电击控制插件，同时提供 Agent 工具与网页 GUI 两条控制面。
 
-一个安全边界（`CoyoteRuntime`）同时约束两张面孔：八个模型侧 `coyote_*` 工具与浏览器面板。任何一方都无法绕过软上限、非对称升速限制、会话冷却、播放硬上限与断连即停。
+一个安全边界（`CoyoteRuntime`）同时约束两张面孔：八个模型侧 `coyote_*` 工具与浏览器面板。任何一方都无法绕过软上限、非对称升速限制、会话冷却、播放硬上限与断连即停。v0.2 起另有一个可选的**自动电击**层，把 agent 事件（工具调用、报错、回合结束……）映射为有界脉冲 —— 见[自动电击](#自动电击)。
 
 > 仅限成年人。本插件控制真实电刺激设备，使用前请阅读[安全须知](#安全须知)。
 
@@ -14,6 +14,7 @@
 DSH Agent ─coyote_* 工具──┐
                            ├─▶ CoyoteRuntime（安全边界）─▶ V3 WebSocket 服务 ─▶ DG-LAB App（扫码）─▶ 郊狼设备
 DSH 网页 GUI ─/gui 桥接───┘      软上限 · 升速限制 · 冷却 · 硬上限 · 断连即停
+agent 事件 ─自动电击（可选）──┘   布防闸门 · 冷却 · maxIntensity 封顶 · 基线恢复
 ```
 
 插件扮演官方 DG-LAB V3 socket 协议的 WebSocket **服务端**：配对时生成二维码，官方 App 扫码后，插件即成为控制终端，App 负责把指令转发到设备。
@@ -43,7 +44,7 @@ dsh plugin --profile web add dsh-coyote
 
 | 工具 | 功能 |
 |---|---|
-| `coyote_status` | 完整快照：链路状态、二维码、设备强度、生效上限、剩余冷却。只读。 |
+| `coyote_status` | 完整快照：链路状态、二维码、设备强度、生效上限、剩余冷却，以及（启用时的）自动电击块。只读。 |
 | `coyote_pair` | 开始配对；返回二维码内容与可渲染二维码图。 |
 | `coyote_disconnect` | 结束会话：停止一切、断开 App 关系、进入冷却。 |
 | `coyote_set_strength` | 在 0..200 原始域设置 A/B/双通道。绝对 `value` 或相对 `delta`，返回实际施加值与钳制原因。 |
@@ -75,6 +76,55 @@ GUI 面板走完全相同的 runtime —— 浏览器绕不过 Agent 的限制�
 - **12 个内置预设**（呼吸、心跳、惩罚、电锯……）自带建议起始强度，由声明式规格确定性合成（频率扫 10..1000 ms、强度扫 0..100，曲线 `linear|sine|pulse|random`，可选占空比节奏）。
 - **社区波形导入**：粘贴 [Game-Hub](https://github.com/SweetSmellFox/DG-Lab-Coyote-Game-Hub) `.pulses` JSON（`[{name, pulseData:[hex…]}]`）或裸 hex 列表；校验后持久化到 `waveformDir`，启动时自动加载。同名重导入为覆盖更新。
 
+## 自动电击
+
+可选的事件驱动电击（v0.2）：插件监听 DSH 会话事件流与 `agent/error` / `agent/status` 运行时事件，把它们归约为十一个封闭的领域事件，对每条启用的规则发出一个有界脉冲。默认关闭 —— `autoStim.enabled: true` 之前不监听任何事件、面板也不出现该区块。
+
+**每个脉冲都是绝对瞬态**：通道强度先抬升到 `min(规则 intensity, maxIntensity)`（runtime 仍会钳到软/设备上限与升速限制），波形播放一次，然后恢复脉冲前强度。刚配对、强度为 0 的设备也能直接工作。
+
+闸门链 —— 每个闸门都通过才触发，被拦下的事件直接丢弃并计数，绝不排队：
+
+| 闸门 | 效果 |
+|---|---|
+| 规则启用 | 未启用规则的事件不做任何事。 |
+| 布防 | GUI 的布防/解除开关；解除后事件静默丢弃。 |
+| 非忙碌 | 同一时刻最多一个脉冲（含恢复期）。 |
+| 冷却 | 自动触发之间默认最少 5 秒。 |
+| App 已绑定 | 无设备连接则跳过并计数。 |
+| maxIntensity | 独立封顶（默认 30），叠加在每条规则之上。 |
+
+默认规则表（所有强度 ≤ 默认 `maxIntensity` 30）：
+
+| 事件 | 触发时机 | 默认 |
+|---|---|---|
+| `turn_start` | 新 agent 回合开始 | tap @12、2 秒、开 |
+| `assistant_start` | 回合内第一个流式块 | tap @15、2 秒、开 |
+| `stream_tick` | 流式输出每 `tickIntervalSec`（5 秒） | tremor @15、2 秒、**关** |
+| `tool_call` | 模型调用工具 | tap @20、2 秒、开 |
+| `tool_error` | 工具调用失败 | punish @25、6 秒、开 |
+| `agent_error` | 回合失败（两个事件源按回合去重） | punish @30、8 秒、开 |
+| `turn_end_completed` | 回合正常完成 | heartbeat @20、4 秒、开 |
+| `turn_end_aborted` | 回合中止 / 打断 / 阻塞 | calm @12、3 秒、关 |
+| `turn_end_max_tokens` | 回合触到 token 上限 | saw @20、3 秒、关 |
+| `todo_clear` | 待办全部完成（每个清单只触发一次） | heartbeat @18、4 秒、开 |
+| `agent_idle` | agent 运行→空闲边沿 | calm @12、4 秒、关 |
+
+```yaml
+- id: coyote
+  config:
+    autoStim:
+      enabled: true          # 总开关，显式开启才生效
+      maxIntensity: 30       # 所有规则之上的封顶，1..200
+      cooldownSec: 5         # 自动触发之间的最小间隔秒数
+      tickIntervalSec: 5     # stream_tick 节流间隔
+      restoreBaseline: true  # 每个脉冲后恢复脉冲前强度
+      events:
+        tool_error: { intensity: 25, durationSec: 6, waveform: punish, channel: A }
+        agent_error: { enabled: false }   # 单字段覆盖，其余继承默认
+```
+
+未知事件名会在启动时带着完整合法列表报错。波形名大小写不敏感解析：先内置 id、再导入波形名（写错则该脉冲失败软并记日志 —— 不会拖垮宿主）。GUI 面板会出现自动电击区块：实时布防状态、触发/跳过计数与布防/解除按钮；`coyote_status` 携带同一块给模型。插件卸载时解除布防、截断进行中的脉冲并立即恢复基线。
+
 ## 配置项
 
 全部可选，默认值如下：
@@ -92,6 +142,7 @@ GUI 面板走完全相同的 runtime —— 浏览器绕不过 Agent 的限制�
 | `defaultPlaySec` | `30` | 工具调用未给时长时的默认值。 |
 | `increaseRatePerSec` | `40` | 持续升速（单位/秒）。 |
 | `increaseBurst` | `40` | 突发上调预算（单位）。 |
+| `autoStim` | `enabled: false` | 整个[自动电击](#自动电击)块：`enabled`、`maxIntensity`（30）、`cooldownSec`（5）、`tickIntervalSec`（5）、`restoreBaseline`（true）与逐 `events` 规则覆盖。 |
 
 ## 架构
 
@@ -101,10 +152,11 @@ src/
   waveform/   合成器（规格→窗口）、库（12 预设）、导入器、调度器
   transport/  WebSocket 服务 + 控制终端角色（绑定、心跳、失败安全）
   runtime/    一切都经过的安全边界
+  auto-stim/  rules（事件表+默认值+校验）、mapper（宿主→领域事件）、engine（闸门+脉冲）、attach（cordis 监听）
   gui/        /gui 桥：JSON 操作 ↔ runtime，广播状态
   tools/      8 个 coyote_* 工具定义
 client/index.js   浏览器面板（无构建步骤、加载器注入 React、DSH CSS 变量）
-tests/            114 个测试：单元 + 协议级 MockApp + 离线客户端 harness
+tests/            148 个测试：单元 + 协议级 MockApp + 离线客户端 harness
 ```
 
 设计准则：协议层纯函数、安全单一咽喉点、工具薄而诚实、不过度设计。所有协议决策的依据均为官方 [DG-LAB-OPENSOURCE](https://github.com/ZGQ-inc/DG-LAB-OPENSOURCE) socket/V3 文档。
@@ -113,7 +165,7 @@ tests/            114 个测试：单元 + 协议级 MockApp + 离线客户端 h
 
 ```bash
 pnpm install
-pnpm test         # 114 个测试
+pnpm test         # 148 个测试
 pnpm typecheck
 pnpm build        # 产出 lib/（tsdown）
 ```
