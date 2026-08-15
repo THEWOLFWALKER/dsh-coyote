@@ -1,5 +1,7 @@
 # dsh-coyote
 
+**English** · [**中文**](README.zh-CN.md)
+
 Agent- and GUI-controlled [DG-LAB Coyote](https://www.dungeon-lab.com/) e-stim plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).
 
 One safety envelope serves two faces with equal bounds: eight model-facing `coyote_*` tools and a DSH-aligned browser panel. Neither can bypass soft limits, the asymmetric increase rate limiter, session cooldown, playback caps, or the disconnect fail-safe.

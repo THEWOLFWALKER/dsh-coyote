@@ -1,5 +1,7 @@
 # dsh-coyote
 
+[**English**](README.md) · **中文**
+
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 [DG-LAB 郊狼](https://www.dungeon-lab.com/)电击控制插件，同时提供 Agent 工具与网页 GUI 两条控制面。
 
 一个安全边界（`CoyoteRuntime`）同时约束两张面孔：八个模型侧 `coyote_*` 工具与浏览器面板。任何一方都无法绕过软上限、非对称升速限制、会话冷却、播放硬上限与断连即停。
