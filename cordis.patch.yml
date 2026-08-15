@@ -1,0 +1,10 @@
+# dsh-coyote bundle layer: insert the coyote row.
+# The row loads the node half (safety runtime + transport + GUI bridge + the
+# eight coyote_* tools); the client-modules scan then picks up the package's
+# dsh.client declaration and serves the web panel bundle.
+# No config is pinned here: every default lives in the plugin's Schemastery
+# schema, so users override only what they want to change in their profile.
+- insert:
+    - id: coyote
+      name: dsh-coyote
+      inject: [tools]
