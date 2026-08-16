@@ -76,5 +76,46 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/THEWOLFWALKER/dsh-coyote.git"
+  },
+  "dshWorkshop": {
+    "schema": "omdsh-workshop-package/v1",
+    "type": "plugin",
+    "integration": {
+      "protocol": "harness-profile",
+      "artifact": "cordis.patch.yml"
+    },
+    "install": {
+      "mode": "transactional",
+      "adapter": "profile-bundle",
+      "failurePolicy": "generation-rollback",
+      "touchesCurrentBeforeActivation": false
+    },
+    "lifecycle": {
+      "activation": "restart-host",
+      "dispose": "supported"
+    },
+    "permissions": [
+      "harness:tool",
+      "harness:event",
+      "network:listen",
+      "files:write"
+    ],
+    "compatibility": {
+      "dshVersions": [
+        "0.1.0-rc.6"
+      ]
+    },
+    "capability": {
+      "id": "coyote_set_strength",
+      "kind": "tool",
+      "invocation": "invoke the model-facing coyote_set_strength tool with a channel and an absolute value or a relative delta through the DSH ToolRuntime",
+      "expected": "a structured result reporting the strength actually applied per channel and any soft/device/rate clamping reason; output never exceeds the safety envelope"
+    },
+    "evidence": {
+      "install": null,
+      "failureIsolation": null,
+      "hotReload": null,
+      "remove": null
+    }
   }
 }
