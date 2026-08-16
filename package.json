@@ -81,24 +81,28 @@
     "schema": "omdsh-workshop-package/v1",
     "type": "plugin",
     "integration": {
-      "protocol": "harness-profile",
+      "protocol": "harness-cordis",
       "artifact": "cordis.patch.yml"
     },
     "install": {
-      "mode": "transactional",
-      "adapter": "profile-bundle",
-      "failurePolicy": "generation-rollback",
+      "mode": "guided",
+      "adapter": "third-party",
+      "failurePolicy": "manual",
       "touchesCurrentBeforeActivation": false
     },
     "lifecycle": {
-      "activation": "restart-host",
+      "activation": "immediate",
       "dispose": "supported"
     },
     "permissions": [
       "harness:tool",
       "harness:event",
       "network:listen",
-      "files:write"
+      "file:read",
+      "file:write",
+      "subprocess:none",
+      "shell:none",
+      "credentials:none"
     ],
     "compatibility": {
       "dshVersions": [
@@ -106,10 +110,10 @@
       ]
     },
     "capability": {
-      "id": "coyote_set_strength",
+      "id": "coyote_status",
       "kind": "tool",
-      "invocation": "invoke the model-facing coyote_set_strength tool with a channel and an absolute value or a relative delta through the DSH ToolRuntime",
-      "expected": "a structured result reporting the strength actually applied per channel and any soft/device/rate clamping reason; output never exceeds the safety envelope"
+      "invocation": "invoke the model-facing coyote_status tool through the DSH ToolRuntime",
+      "expected": "a structured snapshot of link state, pairing session and QR, device-reported strengths and hard limits, effective per-channel caps, playback state, cooldown, and auto-stim block; read-only and never changes device output"
     },
     "evidence": {
       "install": null,
