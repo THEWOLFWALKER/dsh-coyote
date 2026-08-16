@@ -24,6 +24,10 @@ One safety envelope serves two faces with equal bounds: eight model-facing `coyo
 
 > Adults only. This plugin controls a real e-stim power box. Read [Safety](#safety) before use.
 
+**Control panel** — the DSH-aligned web GUI (⚡ Coyote button in the DSH sidebar footer):
+
+![dsh-coyote control panel](docs/screenshots/panel.png)
+
 ## How it works
 
 ```

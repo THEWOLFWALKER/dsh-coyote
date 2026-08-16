@@ -24,6 +24,10 @@
 
 > 仅限成年人。本插件控制真实电刺激设备，使用前请阅读[安全须知](#安全须知)。
 
+**控制面板** —— DSH 风格网页 GUI（DSH 侧边栏底部的 ⚡ Coyote 按钮）：
+
+![dsh-coyote 控制面板](docs/screenshots/panel.png)
+
 ## 工作原理
 
 ```
