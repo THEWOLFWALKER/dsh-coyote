@@ -2,6 +2,22 @@
 
 **English** · [**简体中文**](README.zh-CN.md)
 
+![DSH](https://img.shields.io/badge/DSH-DeepSeek%20Harness-1F6FEB?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white)
+![Cordis](https://img.shields.io/badge/Cordis-plugin-FF6B6B?style=flat-square)
+![pnpm](https://img.shields.io/badge/pnpm-F69220?style=flat-square&logo=pnpm&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)
+
+![npm version](https://img.shields.io/npm/v/dsh-coyote?style=flat-square&logo=npm&logoColor=white)
+![tests](https://img.shields.io/badge/tests-148-brightgreen?style=flat-square)
+![license](https://img.shields.io/badge/license-MIT-brightgreen?style=flat-square)
+![awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-listed-00B4D8?style=flat-square)
+
+![18+](https://img.shields.io/badge/18%2B-adults%20only-E91E63?style=flat-square)
+![safety](https://img.shields.io/badge/panic%20stop-always%20safe-00C853?style=flat-square)
+![bzz](https://img.shields.io/badge/bzz%20bzz-zap-FF9800?style=flat-square)
+
 Agent- and GUI-controlled [DG-LAB Coyote](https://www.dungeon-lab.com/) e-stim plugin for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (DSH).
 
 One safety envelope serves two faces with equal bounds: eight model-facing `coyote_*` tools and a DSH-aligned browser panel. Neither can bypass soft limits, the asymmetric increase rate limiter, session cooldown, playback caps, or the disconnect fail-safe. Since v0.2 an opt-in **auto-stim** layer can also map agent events (tool calls, errors, turn ends…) to bounded pulses — see [Auto-stim](#auto-stim).

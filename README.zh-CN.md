@@ -2,6 +2,22 @@
 
 [**English**](README.md) · **简体中文**
 
+![DSH](https://img.shields.io/badge/DSH-DeepSeek%20Harness-1F6FEB?style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white)
+![Cordis](https://img.shields.io/badge/Cordis-插件开发-FF6B6B?style=flat-square)
+![pnpm](https://img.shields.io/badge/pnpm-F69220?style=flat-square&logo=pnpm&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-6E9F18?style=flat-square&logo=vitest&logoColor=white)
+
+![npm version](https://img.shields.io/npm/v/dsh-coyote?style=flat-square&logo=npm&logoColor=white)
+![tests](https://img.shields.io/badge/tests-148-brightgreen?style=flat-square)
+![license](https://img.shields.io/badge/license-MIT-brightgreen?style=flat-square)
+![awesome-dsh-plugin](https://img.shields.io/badge/awesome--dsh--plugin-官方收录-00B4D8?style=flat-square)
+
+![18+](https://img.shields.io/badge/18%2B-仅限成年人-E91E63?style=flat-square)
+![安全](https://img.shields.io/badge/panic%20stop-永远安全-00C853?style=flat-square)
+![电击](https://img.shields.io/badge/bzz%20bzz-zap-FF9800?style=flat-square)
+
 面向 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 [DG-LAB 郊狼](https://www.dungeon-lab.com/)电击控制插件，同时提供 Agent 工具与网页 GUI 两条控制面。
 
 一个安全边界（`CoyoteRuntime`）同时约束两张面孔：八个模型侧 `coyote_*` 工具与浏览器面板。任何一方都无法绕过软上限、非对称升速限制、会话冷却、播放硬上限与断连即停。v0.2 起另有一个可选的**自动电击**层，把 agent 事件（工具调用、报错、回合结束……）映射为有界脉冲 —— 见[自动电击](#自动电击)。
